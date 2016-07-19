@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
+import javax.security.auth.Subject;
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
@@ -139,8 +140,27 @@ public class SAMLAuthenticator extends LoginAuthenticator {
 
     @Override
     public UserIdentity login(String username, Object password, ServletRequest request) {
+        SAMLResponse samlResponse = (SAMLResponse) password;
+        UserIdentity user = null;
+        try {
 
-        UserIdentity user = super.login(username, password, request);
+            String nameId = samlResponse.getNameId();
+            Map<String, List<String>> attributes = samlResponse.getAttributes();
+            String[] roles = samlResponse.getRoles();
+            LOG.debug("Server Principal is: " + samlResponse.getNameId());
+
+            //TODO
+            SAMLUserPrincipal samlUser = new SAMLUserPrincipal(nameId, attributes);
+
+            Subject subject = new Subject();
+            subject.getPrincipals().add(samlUser);
+
+            user = _identityService.newUserIdentity(subject, samlUser, roles);
+
+        } catch (Exception e) {
+            LOG.warn(e);
+        }
+
         if (user != null) {
             HttpSession session = ((HttpServletRequest) request).getSession(true);
             Authentication cached = new SessionAuthentication(getAuthMethod(), user, password);
@@ -349,7 +369,11 @@ public class SAMLAuthenticator extends LoginAuthenticator {
         }
 
         public String getIdpURL() {
-            return _idpURL;
+            String queryDelitimer = "?";
+            if (_idpURL.contains("?")) {
+                queryDelitimer = "&";
+            }
+            return _idpURL + queryDelitimer;
         }
 
     }
